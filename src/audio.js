@@ -1,5 +1,5 @@
 import { computed } from "vue"
-import { files, nowPlaying, positionsMap, switchTrackMode, seekTime } from "./store"
+import { files, nowPlaying, positionsMap, switchTrackMode, seekTime, trackEndMode } from "./store"
 
 export const appAudioContext = new AudioContext()
 
@@ -85,6 +85,9 @@ export function onPlay(e) {
 export function onEnd(e) {
 	if (e.target.dataset?.id != nowPlaying.value.id) return
 	nowPlaying.value.state = 'paused'
+
+	if (trackEndMode.value == 'repeat') currentPlayingFile.value.audioEl.play()
+	else if (trackEndMode.value == 'next' && !isLastPlayableTrack.value) playNext()
 }
 
 /* media sessions handlers */

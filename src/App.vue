@@ -4,7 +4,7 @@ import { IconPlayerPlayFilled, IconPlayerPauseFilled, IconDeviceSpeaker, IconDev
 
 import { useRegisterSW } from 'virtual:pwa-register/vue'
 
-import { levelModel, files, nowPlaying, colorTheme, switchTrackMode, waveformDisplay, seekTime } from './store'
+import { levelModel, files, nowPlaying, colorTheme, switchTrackMode, waveformDisplay, seekTime, trackEndMode } from './store'
 import { getGainValue } from './helpers'
 import { appAudioContext, isFirstPlayableTrack, isLastPlayableTrack, seekFW, seekRW, playNext, playPrev, togglePlay } from './audio'
 
@@ -72,6 +72,7 @@ const waveformDisplayOptions = [{ value: 'real', title: 'Real' }, { value: 'stre
 const colorThemeOptions = [{ value: '', title: 'Auto' }, { value: 'dark', title: 'Dark' }, { value: 'light', title: 'Light' }]
 const switchTrackModeOptions = [{ value: '', title: 'Resume' }, { value: 'relative', title: 'Relative' }, { value: 'absolute', title: 'Absolute' }]
 const seekTimeOptions = [{ value: 5, title: '5s' }, { value: 10, title: '10s' }, { value: 15, title: '15s' }]
+const trackEndOptions = [{ value: '', title: 'Stop' }, { value: 'repeat', title: 'Repeat' }, { value: 'next', title: 'Play next' }]
 const levelModels = [
 	{ value: 'original', title: 'Original', icon: IconDeviceSpeaker, iconActive: IconDeviceSpeakerFilled },
 	{ value: 'spotify', title: 'Spotify', icon: IconBrandSpotify, iconActive: IconBrandSpotifyFilled },
@@ -189,6 +190,7 @@ function installApp() {
 			<SettingsRow label="Waveform length" :options="waveformDisplayOptions" v-model="waveformDisplay" name="waveformDisplay" />
 			<SettingsRow label="Color theme" :options="colorThemeOptions" v-model="colorTheme" name="colorTheme" />
 			<SettingsRow label="Seek time" :options="seekTimeOptions" v-model="seekTime" name="seekTime" />
+			<SettingsRow label="On track end" :options="trackEndOptions" v-model="trackEndMode" name="trackEndMode" />
 			<SettingsRow label="Switch track mode" :options="switchTrackModeOptions" v-model="switchTrackMode" name="switchTrackMode">
 				<p v-if="switchTrackMode == ''"><strong class="fw600">Resume</strong> - Each track remembers its own position. When you switch back to a track, it continues from where it was last played.</p>
 				<p v-else-if="switchTrackMode == 'relative'"><strong class="fw600">Relative</strong> - The new track starts at the same relative position as the previous one (e.g., if the last track was 37% played, the new one starts at 37% of its length).</p>
