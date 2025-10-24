@@ -34,17 +34,22 @@ export async function togglePlay(id) {
 	if (appAudioContext.state == 'suspended') await appAudioContext.resume()
 
 	const newFile = files.value.find(f => f.id == id)
+	if (nowPlaying.value.id == id) return newFile.audioEl.paused ? newFile.audioEl.play() : newFile.audioEl.pause()
+
 	const currentFile = files.value.find(f => f.id == nowPlaying.value.id)
 
-	if (nowPlaying.value.id && nowPlaying.value.id != id) {
-		if (nowPlaying.value.state == 'playing') currentFile.audioEl.pause()
+	if (switchTrackMode.value) {
 		if (switchTrackMode.value == 'absolute' && currentFile.audioEl.currentTime < newFile.duration) newFile.audioEl.currentTime = currentFile.audioEl.currentTime
 		else if (switchTrackMode.value == 'relative' ) {
 			const relPosition = currentFile.audioEl.currentTime / currentFile.duration
-			const newTime = newFile.duration * relPosition
-			newFile.audioEl.currentTime = newTime
+			if (relPosition < 1) {
+				const newTime = newFile.duration * relPosition
+				newFile.audioEl.currentTime = newTime
+			}
 		}
-	} else if (nowPlaying.value.id == id && nowPlaying.value.state == 'playing') return newFile.audioEl.pause()
+	}
+
+	if (!currentFile.audioEl.paused) currentFile.audioEl.pause()
 	newFile.audioEl.play()
 }
 export async function seekToTime(id, time) {

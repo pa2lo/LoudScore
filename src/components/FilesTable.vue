@@ -138,7 +138,7 @@ const levelModels = [{ val: 'spotify', title: 'Spotify' }, { val: 'youtube', tit
 						<IconPlayerPlayFilled v-else />
 					</button>
 				</Transition>
-				<audio v-if="f.status == 'completed'" class="invisible" :data-id="f.id" :ref="(e) => setAudioRef(f, e)" :src="f.audioSrc" @timeupdate="onTimeUpdate" @play="onPlay" @pause="onPause" @ended="onEnd"></audio>
+				<audio v-if="f.status == 'completed'" class="invisible" :data-id="f.id" :ref="(e) => setAudioRef(f, e)" preload :src="f.audioSrc" @timeupdate="onTimeUpdate" @play="onPlay" @pause="onPause" @ended="onEnd"></audio>
 			</div>
 			<div class="track-waveform">
 				<Transition name="fade">
