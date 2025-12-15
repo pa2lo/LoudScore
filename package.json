@@ -17,6 +17,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.1",
+    "baseline-browser-mapping": "^2.9.7",
     "vite": "^7.1.7",
     "vite-plugin-pwa": "^1.1.0",
     "vite-plugin-vue-devtools": "^8.0.2"

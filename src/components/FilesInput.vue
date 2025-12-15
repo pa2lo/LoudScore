@@ -10,12 +10,17 @@ const props = defineProps({
 async function handleFileChange(e) {
 	if (!e.target?.files) return
 
-	const inputFiles = Array.from(e.target.files)
+	processFiles(Array.from(e.target.files))
+}
+
+async function processFiles(filesList) {
+	if (!filesList?.length) return
+
 	analyzing.value = true
 
 	console.time('ProcessTime')
 
-	await Promise.all(inputFiles.map(async f => {
+	await Promise.all(filesList.map(async f => {
 		const newID = crypto.randomUUID()
 
 		files.value.push({
@@ -115,10 +120,32 @@ async function analyzeFile(file) {
 		await audioContext.close()
 	}
 }
+
+// d&d events
+function onDragOver(e) {
+	const fileItem = e.dataTransfer.items[0]
+
+	if (fileItem && fileItem.kind === 'file') {
+		e.preventDefault()
+		if (fileItem.type.startsWith("audio/")) e.dataTransfer.dropEffect = "copy"
+		else e.dataTransfer.dropEffect = "none"
+	}
+}
+function onDrop(e) {
+	const fileItems = e.dataTransfer.items
+
+	if (fileItems.length) {
+		e.preventDefault()
+		let filteredFiles = Array.from(fileItems).filter(f => f.type.startsWith('audio/'))
+		if (!filteredFiles.length) return
+
+		processFiles(filteredFiles.map(f => f.getAsFile()))
+	}
+}
 </script>
 
 <template>
-	<label v-if="large" class="ta-c files-label">
+	<label v-if="large" class="ta-c files-label" @dragover="onDragOver" @drop="onDrop">
 		<IconUpload class="files-label-ico" />
 		<p class="mt05 bigger color-heading"><strong>Click to select</strong> or drag and drop files here</p>
 		<p class="mt025 small light">MP3, WAV, OGG, M4A, FLAC (multiple files supported)</p>
