@@ -177,6 +177,10 @@ p:where(:not(:first-child)) {
 	color: var(--accent);
 }
 
+.levelmodels-outer {
+	anchor-name: --dropdown;
+}
+
 .levelmodels, .setting-options {
 	border-radius: .75rem;
 	width: fit-content;
@@ -552,6 +556,7 @@ button, .button {
 	padding: .25rem;
 	border-radius: .75rem;
 	width: auto;
+	position-anchor: --dropdown;
 }
 
 /* dialog */
