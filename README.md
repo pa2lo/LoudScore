@@ -7,6 +7,7 @@ A **Vue 3-based PWA** for measuring the loudness of audio files and displaying t
 - **Play and compare** files with volume matching for each streaming service
 - **Offline-ready** thanks to full **PWA support**
 - Keyboard shortcuts, Light/Dark mode and more
+- Save and reload sessions in Chromium based browsers
 
 ## Live demo
 [https://loudscore.pa2lo.net](https://loudscore.pa2lo.net)
