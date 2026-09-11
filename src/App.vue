@@ -8,9 +8,12 @@ import { levelModel, files, nowPlaying, colorTheme, switchTrackMode, waveformDis
 import { getGainValue } from './helpers'
 import { appAudioContext, isFirstPlayableTrack, isLastPlayableTrack, seekFW, seekRW, playNext, playPrev, togglePlay } from './audio'
 
+import { initializeSessions, supportsSessions, storageError, inputError } from './sessions'
+
 import SettingsRow from './components/SettingsRow.vue'
 import FilesInput from './components/FilesInput.vue'
 import FilesTable from './components/FilesTable.vue'
+import SessionsPopover from './components/SessionsPopover.vue'
 
 // UI
 let settingsEl = ref(null)
@@ -41,6 +44,7 @@ onBeforeMount(() =>{
 })
 onMounted(() => {
 	document.addEventListener('keydown', handleGlobalKeypress)
+	initializeSessions()
 })
 onBeforeUnmount(async () => {
 	document.removeEventListener('keydown', handleGlobalKeypress)
@@ -54,7 +58,7 @@ onBeforeUnmount(async () => {
 
 /* app events */
 function handleGlobalKeypress(e) {
-	if (!files.value.length || document.querySelector('dialog[open]')) return
+	if (!files.value.length || document.querySelector('dialog[open]') || e.target.closest('input, textarea, select, [contenteditable=true]') || document.querySelector('#sessionsPopover:popover-open')) return
 
 	if (e.code == 'Space' && nowPlaying.value.id && !document.activeElement.matches('button')) togglePlay(nowPlaying.value.id)
 	if (e.code == 'ArrowRight') seekFW()
@@ -132,13 +136,13 @@ function installApp() {
 						<span class="levelmodel-toggle-title">{{ currentLevelModel.title }}</span>
 						<IconChevronDown class="levelmodel-toggle-arrow" />
 					</button>
-					<div id="lovelModelPopover" class="levelmodels-popover-cont" popover>
-						<button v-for="lm in levelModels" class="levelmodel-button" :class="{isActive: levelModel == lm.value}" popovertarget="lovelModelPopover" popovertargetaction="hide" @click="levelModel = lm.value">
+					<div id="lovelModelPopover" class="app-popover levelmodels-popover-cont" popover>
+						<button v-for="lm in levelModels" class="popover-option" :class="{isActive: levelModel == lm.value}" popovertarget="lovelModelPopover" popovertargetaction="hide" @click="levelModel = lm.value">
 							<component :is="levelModel == lm.value ? lm.iconActive : lm.icon" class="levelmodel-ico" />
 							<span class="levelmodel-button-text">{{ lm.title }}</span>
 						</button>
 					</div>
-					<div class="levelmodels xl-hide">
+					<div class="levelmodels xxl-hide">
 						<label v-for="lm in levelModels" class="levelmodel">
 							<input type="radio" class="levelmodel-input" name="levelmodel" :value="lm.value" v-model="levelModel" />
 							<component :is="levelModel == lm.value ? lm.iconActive : lm.icon" class="levelmodel-ico" />
@@ -147,11 +151,13 @@ function installApp() {
 					</div>
 				</div>
 			</TransitionGroup>
+			<SessionsPopover v-if="supportsSessions" />
 			<button class="button button-light button-narrower" @click="settingsEl.showModal()">
 				<IconSettings class="button-ico" />
 				<span class="m-hide">Settings</span>
 			</button>
 		</header>
+		<p v-if="storageError || inputError" class="line color-red" role="alert">{{ storageError || inputError }}</p>
 		<Transition name="fade" mode="out-in">
 			<FilesInput v-if="!files.length" large />
 			<div v-else :class="{waveformStretch: waveformDisplay == 'stretch'}">

@@ -6,12 +6,15 @@ import { appAudioContext, togglePlay, setFirstPlayableFile, onTimeUpdate, onPlay
 import { levelModel, files, positionsMap, nowPlaying } from '@/store'
 import { formatPenalty, formatMS, getGainValue } from '@/helpers'
 
+import { busy, supportsSessions, reconnectFile, disposeFile } from '@/sessions'
+import { analyzing } from '@/store'
+
 import Waveform from './Waveform.vue'
 
 async function removeFile(id) {
 	let fileToRemove = files.value.find(f => f.id == id)
 
-	if (!fileToRemove) return
+	if (!fileToRemove || busy.value || analyzing.value) return
 
 	if (nowPlaying.value.id == id) {
 		if (nowPlaying.value.state == 'playing') await fileToRemove.audioEl.pause()
@@ -27,8 +30,7 @@ async function removeFile(id) {
 
 	delete positionsMap.value[id]
 
-	if (fileToRemove.gainNode) fileToRemove.gainNode.disconnect()
-	if (fileToRemove.audioSource) fileToRemove.audioSource.disconnect()
+	disposeFile(fileToRemove)
 
 	files.value = files.value.filter(f => f.id != id)
 
@@ -39,7 +41,7 @@ async function removeFile(id) {
 }
 
 function setAudioRef(file, el) {
-	if (file.gainNode) return
+	if (!el || file.gainNode) return
 
 	let audioSource = appAudioContext.createMediaElementSource(el)
 	let gainNode = appAudioContext.createGain()
@@ -74,6 +76,7 @@ function onDragOver(e, index) {
 	if (index != dragIndex.value) e.preventDefault()
 }
 function onDrop(e, index) {
+	if (busy.value || analyzing.value || dragIndex.value === null) return
 	files.value.splice(index, 0, files.value.splice(dragIndex.value, 1)[0])
 	clearDragVars()
 }
@@ -115,7 +118,7 @@ const levelModels = [{ val: 'spotify', title: 'Spotify' }, { val: 'youtube', tit
 				rowDrop: dragHoverIndex == index,
 				rowDragged: dragIndex == index
 			}"
-			:draggable="dragAllowed"
+			:draggable="dragAllowed && !busy && !analyzing"
 			@dragstart="onDragStart($event, index)"
 			@dragenter="onDragEnter($event, index)"
 			@dragover="onDragOver($event, index)"
@@ -150,7 +153,9 @@ const levelModels = [{ val: 'spotify', title: 'Spotify' }, { val: 'youtube', tit
 			</div>
 			<Transition name="fade" mode="out-in">
 				<div v-if="f.status == 'analyzing'" class="track-message color-blue fw600">Analyzing...</div>
-				<div v-else-if="f.status == 'error'" class="track-message color-red fw600">{{ f.error }}</div>
+				<div v-else-if="f.status == 'error'" class="track-message color-red fw600">
+					<button v-if="supportsSessions" class="button button-light popover-button" :disabled="busy || analyzing" @click="reconnectFile(f)" :title="f.error">{{ f.needsPermission ? 'Restore access' : 'Locate file' }}</button>
+				</div>
 				<div v-else class="track-data ta-c flex">
 					<div class="track-level fw600 color-heading" data-title="dBTP">{{ formatPenalty(f.truePeak) }}</div>
 					<div class="track-level fw600 color-heading clickable" data-title="LUFS" @click="levelModel = 'original'">{{ formatPenalty(f.lufs) }}</div>
@@ -158,7 +163,7 @@ const levelModels = [{ val: 'spotify', title: 'Spotify' }, { val: 'youtube', tit
 				</div>
 			</Transition>
 			<div v-if="f.status != 'analyzing'" class="track-remove">
-				<button @click.prevent="removeFile(f.id)" class="button-x"><IconX /></button>
+				<button :disabled="busy || analyzing" @click.prevent="removeFile(f.id)" class="button-x"><IconX /></button>
 			</div>
 		</div>
 	</div>

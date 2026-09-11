@@ -1,158 +1,42 @@
 <script setup>
-import { analyzing, files, nowPlaying, positionsMap } from '@/store'
+import { analyzing } from '@/store'
 import { IconUpload } from '@tabler/icons-vue'
-import { setFirstPlayableFile, setMediaSessionHandlers } from '@/audio'
-
-const props = defineProps({
-	large: Boolean
-})
-
-async function handleFileChange(e) {
-	if (!e.target?.files) return
-
-	processFiles(Array.from(e.target.files))
+import { supportsSessions, busy, addFiles, pickFiles, inputError } from '@/sessions'
+import { ref } from 'vue'
+defineProps({ large: Boolean })
+const input = ref(null)
+function selectFiles() {
+	if (busy.value || analyzing.value) return
+	if (supportsSessions) pickFiles()
+	else input.value.click()
 }
-
-async function processFiles(filesList) {
-	if (!filesList?.length) return
-
-	analyzing.value = true
-
-	console.time('ProcessTime')
-
-	await Promise.all(filesList.map(async f => {
-		const newID = crypto.randomUUID()
-
-		files.value.push({
-			id: newID,
-			name: f.name.replace(/\.[^/.]+$/, ''),
-			status: 'analyzing',
-			duration: 0,
-			size: '-',
-			lufs: '-',
-			truePeak: '-',
-			spotify: '-',
-			youtube: '-',
-			apple: '-',
-			waveform: [],
-			audioSrc: URL.createObjectURL(f),
-			audioEl: null,
-			audioSource: null,
-			gainNode: null
-		})
-		positionsMap.value[newID] = 0
-
-		try {
-			const result = await analyzeFile(f)
-			Object.assign(files.value.find(item => item.id == newID), result)
-		} catch (err) {
-			console.error('Error analyzing file:', err);
-			Object.assign(files.value.find(item => item.id == newID), {
-				error: err.message || 'Unknown error during analysis',
-				status: 'error'
-			})
-		}
-	}))
-
-	analyzing.value = false
-	console.timeEnd('ProcessTime')
-
-	if (!nowPlaying.value.id) setFirstPlayableFile()
-
-	setMediaSessionHandlers()
+function changed(event) {
+	addFiles(Array.from(event.target.files || []).map(file => ({ file })))
+	event.target.value = ''
 }
-
-async function analyzeFile(file) {
-	const worker = new Worker('worker.js')
-	const audioContext = new AudioContext()
-
+async function dropped(event) {
+	if (busy.value || analyzing.value) return
+	// Request handles before yielding; the drag data store is only available during the event.
+	const pending = Array.from(event.dataTransfer.items).filter(item => item.kind === 'file').map(item => {
+		const file = item.getAsFile()
+		const handle = supportsSessions && item.getAsFileSystemHandle ? item.getAsFileSystemHandle() : Promise.resolve(null)
+		return handle.then(handle => ({ file, handle }), () => ({ file, handle: null }))
+	})
 	try {
-		let audioBuffer
-		try {
-			const arrayBuffer = await file.arrayBuffer()
-			audioBuffer = await audioContext.decodeAudioData(arrayBuffer)
-		} catch (err) {
-			throw new Error(`Audio decoding failed: ${err?.message || err}`)
-		}
-
-		const channels = []
-		for (let i = 0; i < audioBuffer.numberOfChannels; i++) {
-			channels.push(audioBuffer.getChannelData(i).slice())
-		}
-
-		const sampleRate = audioBuffer.sampleRate
-		const duration = Math.round(audioBuffer.duration)
-		const transferList = channels.map(ch => ch.buffer)
-
-		return await new Promise((resolve, reject) => {
-			worker.onmessage = (e) => {
-				const data = e.data
-
-				if (data?.error) {
-					reject(new Error(data.error))
-					return
-				}
-
-				worker.terminate()
-
-				resolve({
-					size: (file.size / 1024 / 1024).toFixed(2),
-					duration,
-					lufs: data.lufs.toFixed(1),
-					truePeak: data.truePeak.toFixed(1),
-					spotify: data.spotify.toFixed(1),
-					youtube: data.youtube.toFixed(1),
-					apple: data.apple.toFixed(1),
-					status: 'completed',
-					waveform: data.waveform,
-					sampleRate
-				})
-			}
-
-			worker.onerror = (err) => {
-				reject(new Error(`Worker crashed: ${err?.message || err}`))
-				worker.terminate()
-			}
-
-			worker.postMessage({ channels, sampleRate }, transferList)
-		})
-	} finally {
-		await audioContext.close()
-	}
-}
-
-// d&d events
-function onDragOver(e) {
-	const fileItem = e.dataTransfer.items[0]
-
-	if (fileItem && fileItem.kind === 'file') {
-		e.preventDefault()
-		if (fileItem.type.startsWith("audio/")) e.dataTransfer.dropEffect = "copy"
-		else e.dataTransfer.dropEffect = "none"
-	}
-}
-function onDrop(e) {
-	const fileItems = e.dataTransfer.items
-
-	if (fileItems.length) {
-		e.preventDefault()
-		let filteredFiles = Array.from(fileItems).filter(f => f.type.startsWith('audio/'))
-		if (!filteredFiles.length) return
-
-		processFiles(filteredFiles.map(f => f.getAsFile()))
-	}
+		await addFiles((await Promise.all(pending)).filter(({ file, handle }) => file && handle?.kind !== 'directory' && (file.type.startsWith('audio/') || /\.(mp3|wav|ogg|m4a|flac|aac|aiff|opus|webm)$/i.test(file.name))))
+	} catch (error) { inputError.value = error.message }
 }
 </script>
-
 <template>
-	<label v-if="large" class="ta-c files-label" @dragover="onDragOver" @drop="onDrop">
-		<IconUpload class="files-label-ico" />
-		<p class="mt05 bigger color-heading"><strong>Click to select</strong> or drag and drop files here</p>
-		<p class="mt025 small light">MP3, WAV, OGG, M4A, FLAC (multiple files supported)</p>
-		<input type="file" class="invisible" multiple accept="audio/*" @change="handleFileChange" :disabled="analyzing" />
-	</label>
-	<label v-else class="button bttn-file-input" :class="{disabled: analyzing}">
-		<input type="file" class="invisible" multiple accept="audio/*" @change="handleFileChange" :disabled="analyzing" />
-		<span>Add files</span>
-	</label>
+	<div @dragover.prevent @drop.prevent.stop="dropped">
+		<input ref="input" type="file" class="invisible" tabindex="-1" multiple accept="audio/*" @change="changed" :disabled="busy || analyzing" />
+		<button v-if="large" type="button" class="ta-c files-label" :disabled="busy || analyzing" @click="selectFiles">
+			<IconUpload class="files-label-ico" />
+			<span class="files-label-text mt05 bigger color-heading"><strong>Click to select</strong> or drag and drop files here</span>
+			<span class="files-label-text mt025 small light">MP3, WAV, OGG, M4A, FLAC (multiple files supported)</span>
+		</button>
+		<button v-else type="button" class="button bttn-file-input" :disabled="busy || analyzing" @click="selectFiles">
+			<span>Add files</span>
+		</button>
+	</div>
 </template>

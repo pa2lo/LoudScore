@@ -152,6 +152,8 @@ p:where(:not(:first-child)) {
 
 /* inputs */
 .files-label {
+	width: 100%;
+	font-weight: inherit;
 	border: 2px dashed var(--border);
 	border-radius: .75rem;
 	margin-top: 1.5rem;
@@ -161,6 +163,13 @@ p:where(:not(:first-child)) {
 	transition: border-color .1s;
 	background: color-mix(in srgb, var(--card), var(--accentContrast));
 	line-height: 1.25;
+}
+.files-label-text {
+	display: block;
+}
+.files-label:disabled {
+	cursor: not-allowed;
+	opacity: .4;
 }
 .files-label:hover {
 	background: var(--accentContrast);
@@ -189,7 +198,7 @@ p:where(:not(:first-child)) {
 	font-weight: 600;
 	background: var(--accentLight);
 }
-.levelmodel, .setting-label, .levelmodel-button {
+.levelmodel, .setting-label, .popover-option {
 	position: relative;
 	padding: .25rem .75rem;
 	display: flex;
@@ -205,12 +214,12 @@ p:where(:not(:first-child)) {
 .levelmodel-ico, .button-ico {
 	font-size: 1.5rem;
 }
-.levelmodel:hover, .setting-label:hover, .levelmodel-button:hover {
+.levelmodel:hover, .setting-label:hover, .popover-option:hover {
 	color: var(--accent);
 	/* color: var(--accentDark); */
 	background: color-mix(in srgb, var(--accentLight) 65%, var(--accentContrast));
 }
-.levelmodel:has(input:checked), .setting-label:has(input:checked), .levelmodel-button.isActive {
+.levelmodel:has(input:checked), .setting-label:has(input:checked), .popover-option.isActive {
 	cursor: default;
 	background: var(--accentContrast);
 	color: var(--accent);
@@ -223,7 +232,7 @@ p:where(:not(:first-child)) {
 	pointer-events: none;
 }
 
-.levelmodel-button {
+.popover-option {
 	width: 100%;
 	justify-content: start;
 }
@@ -244,6 +253,7 @@ p:where(:not(:first-child)) {
 	padding-top: 0.875rem;
 }
 .setting-title {
+	display: block;
 	margin-bottom: 0.25rem;
 }
 .setting-info p {
@@ -335,6 +345,19 @@ button, .button {
 	font-size: 1.5rem;
 	margin-block: -.25rem;
 }
+.popover-button {
+	height: 2rem;
+	border-radius: .5rem;
+}
+.button-full {
+	width: 100%;
+}
+
+.button-outline {
+	color: var(--accent);
+	background-color: var(--accentContrast);
+	border: 1px solid var(--accent);
+}
 
 .control-button {
 	font-size: 1.5rem;
@@ -349,8 +372,11 @@ button, .button {
 
 .button-x {
 	width: 1.5rem;
+	line-height: 1.5rem;
 	height: 1.5rem;
+	text-align: center;
 	font-size: 1rem;
+	cursor: pointer;
 }
 .button-x:hover {
 	background-color: var(--c-red);
@@ -377,7 +403,7 @@ button, .button {
 .button:not(:disabled, .disabled):hover, .isCurrent .button-play, .button-play.control-play:not(:disabled):hover {
 	background-color: var(--accentDark);
 }
-.button-light:not(:disabled):hover, .button-play:not(:disabled):hover, .isCurrent .button-play:not(:disabled):hover, .button-play.control-play {
+.button-light:not(:disabled):hover, .button-outline:not(:disabled, .disabled):hover, .button-play:not(:disabled):hover, .isCurrent .button-play:not(:disabled):hover, .button-play.control-play {
 	background-color: var(--accent);
 }
 .button:not(:disabled, .disabled):hover, .button-play:not(:disabled):hover, .isCurrent .button-play, .button-play.control-play {
@@ -545,18 +571,83 @@ button, .button {
 }
 
 /* popover */
-.levelmodels-popover-cont {
+.app-popover {
 	margin: .5rem 0 0;
-	inset: unset;
-	left: anchor(left);
-	right: anchor(right);
- 	top: anchor(bottom);
 	background: var(--accentLight);
+	color: var(--color);
 	border: none;
 	padding: .25rem;
 	border-radius: .75rem;
+	box-shadow: 0 .5rem 1rem #0004;
+}
+.levelmodels-popover-cont {
+	inset: unset;
+	left: anchor(left);
+	right: anchor(right);
+	top: anchor(bottom);
 	width: auto;
 	position-anchor: --dropdown;
+}
+.sessions-toggle {
+	anchor-name: --sessions;
+}
+.sessions-popover {
+	inset: 5rem 1rem auto auto;
+	width: min(14rem, calc(100vw - 2rem));
+	max-height: 75vh;
+	overflow: auto;
+}
+@supports (top: anchor(bottom)) {
+	.sessions-popover {
+		position-anchor: --sessions;
+		top: anchor(bottom);
+		right: max(1rem, anchor(right));
+	}
+}
+.sessions-popover p {
+	margin: .5625rem .75rem;
+	line-height: 1;
+}
+.sessions-popover .button + .button {
+	margin-top: 0.25rem;
+}
+.session-entry {
+	min-height: 2rem;
+	height: auto;
+	padding: .5rem .75rem;
+}
+.session-entry-inner {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	text-align: left;
+	overflow-wrap: anywhere;
+	flex: 1;
+	gap: .25rem;
+}
+.session-entry .button-x {
+	margin-right: -0.25rem;
+}
+
+#session-name {
+	width: 100%;
+	padding: .5rem .75rem;
+	color: var(--color);
+	background: var(--accentContrast);
+	border: 1px solid var(--border);
+	border-radius: .5rem;
+	height: 2.5rem;
+	font: inherit;
+	line-height: 1;
+}
+#session-name:focus-visible {
+	outline: none;
+	border-color: var(--accent);
+}
+* + .saved-sessions-section {
+	margin-top: 0.25rem;
+	padding-top: 0.25rem;
+	border-top: 1px solid color-mix(in srgb, var(--accentDark), var(--border) 75%);
 }
 
 /* dialog */
@@ -607,6 +698,15 @@ button, .button {
 	box-shadow: 0 2px 0 var(--accent);
 }
 
+@media screen and (max-width: 1160px) {
+	.xxl-hide {
+		display: none;
+	}
+	.levelmodel-toggle {
+		display: flex;
+	}
+}
+
 @media screen and (max-width: 1100px) {
 	.xl-hide {
 		display: none;
@@ -616,10 +716,6 @@ button, .button {
 	}
 	.files-table .narrower {
 		width: 9%;
-	}
-
-	.levelmodel-toggle {
-		display: flex;
 	}
 
 	.track-headers {
@@ -646,7 +742,17 @@ button, .button {
 		height: 2.25rem;
 	}
 }
-@media screen and (max-width: 700px) {
+@media screen and (max-width: 850px) {
+	.logo-svg {
+		margin: 0;
+		width: 2.5rem;
+		height: 2.5rem;
+	}
+	.logo-text {
+		display: none;
+	}
+}
+@media screen and (max-width: 730px) {
 	body {
 		padding: 1rem;
 	}
@@ -680,18 +786,12 @@ button, .button {
 		font-size: 0.6875rem;
 		margin-bottom: 0.125rem;
 	}
-	.logo-svg {
-		margin: 0;
-	}
-	.logo-text {
-		display: none;
-	}
 	.button-narrower {
 		padding-inline: .75rem;
 	}
 }
 
-@media screen and (max-width: 500px) {
+@media screen and (max-width: 580px) {
 	.control-buttons {
 		order: 3;
 		width: 100%;
