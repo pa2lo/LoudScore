@@ -70,7 +70,7 @@ function row(entry) {
 	return {
 		...entry,
 		handle: entry.handle ? markRaw(entry.handle) : null,
-		status: 'queued',
+		status: 'loading',
 		progress: null,
 		duration: 0,
 		waveform: [],
@@ -88,31 +88,45 @@ export function cancelFile(item) {
 	item.progress = null
 }
 // A queued import can be removed while the initial session write is pending.
-async function loadRow(item, file) {
+async function loadRow(item, file, { verifyContent = false } = {}) {
 	if (!item) return
 	const controller = new AbortController()
 	const { signal } = controller
 	rowJobs.set(item.id, controller)
 	item.errorCode = null
-	item.status = 'queued'
+	item.status = 'loading'
 	item.progress = null
 	try {
+		item.needsPermission = false
+		if (!file) {
+			if (!item.handle) throw new Error('Select this file again to restore access.')
+			if (await item.handle.queryPermission({ mode: 'read' }) !== 'granted') {
+				item.needsPermission = true
+				throw new Error('Permission required to open this file.')
+			}
+			signal.throwIfAborted()
+			file = await item.handle.getFile()
+		}
+		item.error = ''
+		signal.throwIfAborted()
+		// Trust saved analysis on restore; only explicit replacement files need
+		// content verification. The version prefix still invalidates old analysis.
+		if (!verifyContent && item.analysisId?.startsWith(`v${analysisVersion}:${ANALYSIS_SAMPLE_RATE}:`)) {
+			let cached
+			try { cached = await db('analysis', 'get', item.analysisId) }
+			catch (error) { storageFailure(error) }
+			signal.throwIfAborted()
+			if (cached) {
+				item.audioSrc = URL.createObjectURL(file)
+				Object.assign(item, cached.result, { progress: 100 })
+				return
+			}
+		}
+		// Keep expensive reads and analysis bounded; cached restores need no slot.
+		item.status = 'queued'
 		await enqueueAnalysis(async () => {
 			signal.throwIfAborted()
-			item.status = 'decoding'
-			item.needsPermission = false
-			if (!file) {
-				if (!item.handle) throw new Error('Select this file again to restore access.')
-				if (await item.handle.queryPermission({ mode: 'read' }) !== 'granted') {
-					item.needsPermission = true
-					throw new Error('Permission required to open this file.')
-				}
-				signal.throwIfAborted()
-				file = await item.handle.getFile()
-			}
-			item.needsPermission = false
-			item.error = ''
-			signal.throwIfAborted()
+			item.status = 'loading'
 			const bytes = await file.arrayBuffer()
 			signal.throwIfAborted()
 			const hash = await crypto.subtle.digest('SHA-256', bytes)
@@ -186,7 +200,10 @@ export async function loadSession(id, clearDraft = false) {
 		const record = clearDraft && id === 'draft' ? null : await db('sessions', 'get', id)
 		ready = false
 		files.value.forEach(disposeFile)
-		nowPlaying.value = { id: null, state: null }
+		nowPlaying.value = {
+			id: null,
+			state: null
+		}
 		positionsMap.value = {}
 		activeSession.value = id
 		files.value = (record?.files || []).map(row)
@@ -304,7 +321,9 @@ export async function reconnectFile(item) {
 		// One browser prompt can grant access to several saved handles. Recheck
 		// every blocked file without prompting again or reloading playable tracks.
 		const pending = files.value.filter(file => file.id !== item.id && file.needsPermission && file.handle)
-		await Promise.all([item, ...pending].map(file => loadRow(file)))
+		await Promise.all([item, ...pending].map(file => loadRow(file, undefined, {
+			verifyContent: file === item && typeof result !== 'string'
+		})))
 		if (!nowPlaying.value.id) finishLoading()
 		await persistSession()
 	} catch (error) {

@@ -15,7 +15,7 @@ async function removeFile(id) {
 	let fileToRemove = files.value.find(f => f.id == id)
 
 	if (!fileToRemove) return
-	const pending = ['queued', 'decoding', 'analyzing'].includes(fileToRemove.status)
+	const pending = ['loading', 'queued', 'decoding', 'analyzing'].includes(fileToRemove.status)
 	if (!pending && (busy.value || analyzing.value)) return
 
 	if (nowPlaying.value.id == id) {
@@ -129,13 +129,13 @@ const levelModels = [{ val: 'spotify', title: 'Spotify' }, { val: 'youtube', tit
 			@dragend="clearDragVars"
 		>
 			<div class="track-grip">
-				<span v-if="!['queued', 'decoding', 'analyzing'].includes(f.status)" class="button-grip flex ai-c" @pointerdown="dragAllowed = true" @pointerup="dragAllowed = false" @pointercancel="dragAllowed = false">
+				<span v-if="!['loading', 'queued', 'decoding', 'analyzing'].includes(f.status)" class="button-grip flex ai-c" @pointerdown="dragAllowed = true" @pointerup="dragAllowed = false" @pointercancel="dragAllowed = false">
 					<IconGripVertical />
 				</span>
 			</div>
 			<div class="track-control ta-c">
 				<Transition name="fade" mode="out-in">
-					<div v-if="['queued', 'decoding', 'analyzing'].includes(f.status)" class="track-loader-outer">
+					<div v-if="['loading', 'queued', 'decoding', 'analyzing'].includes(f.status)" class="track-loader-outer">
 						<IconLoader2 class="track-loader color-heading" />
 					</div>
 					<button v-else-if="f.status == 'completed'" class="button-play" @click="togglePlay(f.id)">
@@ -154,8 +154,9 @@ const levelModels = [{ val: 'spotify', title: 'Spotify' }, { val: 'youtube', tit
 				{{ f.name }}
 			</div>
 			<Transition name="fade" mode="out-in">
-				<div v-if="['queued', 'decoding', 'analyzing'].includes(f.status)" class="track-message track-progress color-blue fw600">
+				<div v-if="['loading', 'queued', 'decoding', 'analyzing'].includes(f.status)" class="track-message track-progress color-blue fw600">
 					<span v-if="f.status == 'queued'">Queued</span>
+					<template v-else-if="f.status == 'loading'"><span class="track-progress-label">Loading</span> <progress :aria-label="`Loading ${f.name}`"></progress></template>
 					<template v-else-if="f.status == 'decoding'"><span class="track-progress-label">Decoding</span> <progress :aria-label="`Decoding ${f.name}`"></progress></template>
 					<template v-else><span class="track-progress-label">Analyzing {{ f.progress ?? 0 }}%</span> <progress :value="f.progress ?? 0" max="100" :aria-label="`Analyzing ${f.name}`"></progress></template>
 				</div>
@@ -171,7 +172,7 @@ const levelModels = [{ val: 'spotify', title: 'Spotify' }, { val: 'youtube', tit
 				</div>
 			</Transition>
 			<div class="track-remove">
-				<button v-if="['queued', 'decoding', 'analyzing'].includes(f.status)" @click.prevent="removeFile(f.id)" class="button-x" title="Cancel and remove"><IconX /></button>
+				<button v-if="['loading', 'queued', 'decoding', 'analyzing'].includes(f.status)" @click.prevent="removeFile(f.id)" class="button-x" title="Cancel and remove"><IconX /></button>
 				<button v-else @click.prevent="removeFile(f.id)" class="button-x" :disabled="busy || analyzing"><IconX /></button>
 			</div>
 		</div>
