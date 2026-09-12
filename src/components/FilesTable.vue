@@ -161,8 +161,8 @@ const levelModels = [{ val: 'spotify', title: 'Spotify' }, { val: 'youtube', tit
 				</div>
 				<div v-else-if="f.status == 'cancelled'" class="track-message">Cancelled</div>
 				<div v-else-if="f.status == 'error'" class="track-message color-red fw600">
-					<span v-if="f.error && !supportsSessions" :title="f.error">Error: {{ f.error }}</span>
-					<button v-else-if="supportsSessions" class="button button-light popover-button" :disabled="busy || analyzing" @click="reconnectFile(f)" :title="f.error">{{ f.needsPermission ? 'Restore access' : 'Locate file' }}</button>
+					<button v-if="supportsSessions && f.errorCode !== 'UNSUPPORTED_CHANNELS'" class="button button-light popover-button button-narrower" :disabled="busy || analyzing" @click="reconnectFile(f)" :title="f.error">{{ f.needsPermission ? 'Restore access' : 'Locate file' }}</button>
+					<span class="track-message-note" v-if="f.error" :title="f.error">Error: {{ f.error }}</span>
 				</div>
 				<div v-else class="track-data ta-c flex" aria-label="Completed">
 					<div class="track-level fw600 color-heading" data-title="dBTP">{{ formatPenalty(f.truePeak) }}</div>

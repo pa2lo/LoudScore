@@ -1,19 +1,18 @@
+export const ANALYSIS_SAMPLE_RATE = 48000
+
 export async function analyzeFile(file, bytes, { signal = new AbortController().signal, onProgress = () => {} } = {}) {
-	let worker, audioContext, closing, rejectWorker
-	const close = () => {
-		if (audioContext && !closing) closing = Promise.resolve(audioContext.close()).catch(() => {})
-		return closing
-	}
+	let worker, rejectWorker
 	const cancel = () => {
 		worker?.terminate()
-		void close()
 		rejectWorker?.(signal.reason)
 	}
 	signal.throwIfAborted()
 	signal.addEventListener('abort', cancel, { once: true })
 	try {
 		onProgress({ status: 'decoding', progress: null })
-		audioContext = new AudioContext()
+		// Offline decoding resamples independently of the output device. Its
+		// rendering channel count does not downmix decodeAudioData results.
+		const audioContext = new OfflineAudioContext(2, 1, ANALYSIS_SAMPLE_RATE)
 		const arrayBuffer = bytes || await file.arrayBuffer()
 		signal.throwIfAborted()
 		let audioBuffer
@@ -25,8 +24,14 @@ export async function analyzeFile(file, bytes, { signal = new AbortController().
 			throw new Error(`Audio decoding failed: ${error?.message || error}`)
 		}
 		signal.throwIfAborted()
-		await close()
-		signal.throwIfAborted()
+		if (audioBuffer.numberOfChannels > 2) {
+			const error = new Error(`File not supported: ${audioBuffer.numberOfChannels} channels. Only mono or stereo (L+R) audio is supported.`)
+			error.code = 'UNSUPPORTED_CHANNELS'
+			throw error
+		}
+		if (audioBuffer.sampleRate !== ANALYSIS_SAMPLE_RATE) {
+			throw new Error(`Audio decoding returned ${audioBuffer.sampleRate} Hz; expected ${ANALYSIS_SAMPLE_RATE} Hz.`)
+		}
 		const channels = Array.from({ length: audioBuffer.numberOfChannels }, (_, i) => audioBuffer.getChannelData(i).slice())
 		const sampleRate = audioBuffer.sampleRate
 		const duration = Math.round(audioBuffer.duration)
@@ -34,6 +39,7 @@ export async function analyzeFile(file, bytes, { signal = new AbortController().
 		onProgress({ status: 'analyzing', progress: 0 })
 		return await new Promise((resolve, reject) => {
 			rejectWorker = reject
+			signal.throwIfAborted()
 			worker.onmessage = ({ data }) => {
 				if (signal.aborted) return
 				if (data?.type === 'progress') {
@@ -60,6 +66,5 @@ export async function analyzeFile(file, bytes, { signal = new AbortController().
 			worker.onmessage = worker.onerror = worker.onmessageerror = null
 			worker.terminate()
 		}
-		await close()
 	}
 }

@@ -483,6 +483,9 @@ button, .button {
 	margin: -.25rem 0;
 	padding: 0 0 0 .5rem;
 }
+.track-message-note {
+	flex: 1;
+}
 .track-progress progress {
 	order: -1;
 	appearance: none;

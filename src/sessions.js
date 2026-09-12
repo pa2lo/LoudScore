@@ -1,7 +1,7 @@
 import { ref, markRaw, watch, toRaw } from 'vue'
 import { files, analyzing, nowPlaying, positionsMap } from './store'
 import { setFirstPlayableFile, setMediaSessionHandlers } from './audio'
-import { analyzeFile } from './analysis'
+import { analyzeFile, ANALYSIS_SAMPLE_RATE } from './analysis'
 import { enqueueAnalysis, createSharedAnalysis } from './analysis-queue'
 import { db, cleanupAnalysis } from './session-db'
 import { useStorage } from './composables/BrowserStorage'
@@ -12,7 +12,7 @@ export const activeSession = useStorage('activeSession', 'draft')
 export const busy = ref(true)
 export const storageError = ref('')
 export const inputError = ref('')
-const analysisVersion = 1
+const analysisVersion = 2
 const sharedAnalysis = createSharedAnalysis()
 const rowJobs = new Map()
 let ready = false
@@ -93,6 +93,7 @@ async function loadRow(item, file) {
 	const controller = new AbortController()
 	const { signal } = controller
 	rowJobs.set(item.id, controller)
+	item.errorCode = null
 	item.status = 'queued'
 	item.progress = null
 	try {
@@ -117,7 +118,7 @@ async function loadRow(item, file) {
 			const hash = await crypto.subtle.digest('SHA-256', bytes)
 			const fingerprint = Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, '0')).join('')
 			signal.throwIfAborted()
-			item.analysisId = `v${analysisVersion}:${fingerprint}`
+			item.analysisId = `v${analysisVersion}:${ANALYSIS_SAMPLE_RATE}:${fingerprint}`
 			const result = await cachedAnalysis(file, bytes, item.analysisId, signal, progress => {
 				if (!signal.aborted) Object.assign(item, progress)
 			})
@@ -131,6 +132,7 @@ async function loadRow(item, file) {
 			return
 		}
 		item.status = 'error'
+		item.errorCode = error.code || null
 		item.error = error.name === 'NotFoundError' ? 'File missing. It may have been moved or deleted.' : error.name === 'NotAllowedError' ? 'Permission required to open this file.' : error.message
 		if (error.name === 'NotAllowedError') item.needsPermission = true
 	} finally {
