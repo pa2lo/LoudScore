@@ -2,6 +2,7 @@ import { ref, markRaw, watch, toRaw } from 'vue'
 import { files, analyzing, nowPlaying, positionsMap } from './store'
 import { setFirstPlayableFile, setMediaSessionHandlers } from './audio'
 import { analyzeFile } from './analysis'
+import { enqueueAnalysis, createSharedAnalysis } from './analysis-queue'
 import { db, cleanupAnalysis } from './session-db'
 import { useStorage } from './composables/BrowserStorage'
 
@@ -12,7 +13,8 @@ export const busy = ref(true)
 export const storageError = ref('')
 export const inputError = ref('')
 const analysisVersion = 1
-const pendingAnalysis = new Map()
+const sharedAnalysis = createSharedAnalysis()
+const rowJobs = new Map()
 let ready = false
 let writes = Promise.resolve()
 const pickerOptions = {
@@ -68,7 +70,8 @@ function row(entry) {
 	return {
 		...entry,
 		handle: entry.handle ? markRaw(entry.handle) : null,
-		status: 'analyzing',
+		status: 'queued',
+		progress: null,
 		duration: 0,
 		waveform: [],
 		audioSrc: null,
@@ -77,61 +80,90 @@ function row(entry) {
 		gainNode: null
 	}
 }
+export function cancelFile(item) {
+	const controller = rowJobs.get(item.id)
+	if (!controller) return
+	controller.abort()
+	item.status = 'cancelled'
+	item.progress = null
+}
+// A queued import can be removed while the initial session write is pending.
 async function loadRow(item, file) {
+	if (!item) return
+	const controller = new AbortController()
+	const { signal } = controller
+	rowJobs.set(item.id, controller)
+	item.status = 'queued'
+	item.progress = null
 	try {
-		item.needsPermission = false
-		if (!file) {
-			if (!item.handle) throw new Error('Select this file again to restore access.')
-			if (await item.handle.queryPermission({ mode: 'read' }) !== 'granted') {
-				item.needsPermission = true
-				throw new Error('Permission required to open this file.')
+		await enqueueAnalysis(async () => {
+			signal.throwIfAborted()
+			item.status = 'decoding'
+			item.needsPermission = false
+			if (!file) {
+				if (!item.handle) throw new Error('Select this file again to restore access.')
+				if (await item.handle.queryPermission({ mode: 'read' }) !== 'granted') {
+					item.needsPermission = true
+					throw new Error('Permission required to open this file.')
+				}
+				signal.throwIfAborted()
+				file = await item.handle.getFile()
 			}
-			file = await item.handle.getFile()
-		}
-		item.needsPermission = false
-		item.error = ''
-		item.status = 'analyzing'
-		const bytes = await file.arrayBuffer()
-		const hash = await crypto.subtle.digest('SHA-256', bytes)
-		const fingerprint = Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, '0')).join('')
-		item.analysisId = `v${analysisVersion}:${fingerprint}`
-		const result = await cachedAnalysis(file, bytes, item.analysisId)
-		item.audioSrc = URL.createObjectURL(file)
-		Object.assign(item, result)
+			item.needsPermission = false
+			item.error = ''
+			signal.throwIfAborted()
+			const bytes = await file.arrayBuffer()
+			signal.throwIfAborted()
+			const hash = await crypto.subtle.digest('SHA-256', bytes)
+			const fingerprint = Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, '0')).join('')
+			signal.throwIfAborted()
+			item.analysisId = `v${analysisVersion}:${fingerprint}`
+			const result = await cachedAnalysis(file, bytes, item.analysisId, signal, progress => {
+				if (!signal.aborted) Object.assign(item, progress)
+			})
+			signal.throwIfAborted()
+			item.audioSrc = URL.createObjectURL(file)
+			Object.assign(item, result)
+		}, signal)
 	} catch (error) {
+		if (signal.aborted) {
+			item.status = 'cancelled'
+			return
+		}
 		item.status = 'error'
 		item.error = error.name === 'NotFoundError' ? 'File missing. It may have been moved or deleted.' : error.name === 'NotAllowedError' ? 'Permission required to open this file.' : error.message
 		if (error.name === 'NotAllowedError') item.needsPermission = true
+	} finally {
+		if (rowJobs.get(item.id) === controller) rowJobs.delete(item.id)
 	}
 }
 // Older session records used the track ID as their cache key.
 function analysisIdFor(file) {
 	return file.analysisId || file.id
 }
-async function cachedAnalysis(file, bytes, id) {
-	// Selecting identical files together should also run only one analysis.
-	if (!pendingAnalysis.has(id)) {
-		const pending = (async () => {
-			try {
-				const cached = await db('analysis', 'get', id)
-				if (cached) return cached.result
-			} catch (error) { storageFailure(error) }
-			const result = await analyzeFile(file, bytes)
-			try {
-				await db('analysis', 'put', { id, result })
-			} catch (error) { storageFailure(error) }
-			return result
-		})()
-		pendingAnalysis.set(id, pending)
-	}
-	try { return await pendingAnalysis.get(id) }
-	finally { pendingAnalysis.delete(id) }
+async function cachedAnalysis(file, bytes, id, signal, onProgress) {
+	return sharedAnalysis(id, async (sharedSignal, report) => {
+		try {
+			const cached = await db('analysis', 'get', id)
+			sharedSignal.throwIfAborted()
+			if (cached) return { ...cached.result, progress: 100 }
+		} catch (error) {
+			sharedSignal.throwIfAborted()
+			storageFailure(error)
+		}
+		const result = await analyzeFile(file, bytes, { signal: sharedSignal, onProgress: report })
+		sharedSignal.throwIfAborted()
+		try { await db('analysis', 'put', { id, result }) }
+		catch (error) { storageFailure(error) }
+		return result
+	}, signal, onProgress)
 }
 function finishLoading() {
 	setFirstPlayableFile()
 	setMediaSessionHandlers()
 }
 export function disposeFile(file) {
+	cancelFile(file)
 	file.audioEl?.pause()
 	if (file.audioEl) {
 		file.audioEl.removeAttribute('src')

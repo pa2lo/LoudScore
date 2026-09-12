@@ -1,3 +1,16 @@
+// Stage weights describe completed work, not elapsed-time estimates. Messages
+// are capped at ten per second; completion is carried only by the result.
+function createProgress() {
+	let lastTime = -Infinity, lastPercent = -1;
+	return (value) => {
+		const progress = Math.min(99, Math.floor(value));
+		const now = performance.now();
+		if (progress <= lastPercent || now - lastTime < 100) return;
+		lastTime = now;
+		lastPercent = progress;
+		self.postMessage({ type: 'progress', progress });
+	};
+}
 self.onmessage = (e) => {
 	try {
 		const { channels, sampleRate } = e.data;
@@ -10,15 +23,22 @@ self.onmessage = (e) => {
 			getChannelData: (i) => channels[i]
 		};
 
-		const lufs = calculateLUFS(audioBuffer);
-		const truePeak = calculateTruePeak(audioBuffer);
-		const waveform = generateTimeBasedWaveform(audioBuffer);
+		const report = createProgress();
+		report(0);
+		const lufs = calculateLUFS(audioBuffer, report);
+		report(80);
+		const truePeak = calculateTruePeak(audioBuffer, report);
+		report(94);
+		const waveform = generateTimeBasedWaveform(audioBuffer, report);
+		report(99);
 
 		const spotifyPenalty = Math.min(-14 - lufs, Math.max(0, -1 - truePeak));
 		const youtubePenalty = Math.min(0, -14 - lufs);
 		const applePenalty = -16 - lufs;
 
 		self.postMessage({
+			type: 'result',
+			progress: 100,
 			lufs,
 			truePeak,
 			waveform,
@@ -28,6 +48,7 @@ self.onmessage = (e) => {
 		});
 	} catch (err) {
 		self.postMessage({
+			type: 'error',
 			error: `Worker error: ${err.message}`
 		});
 	}
@@ -132,7 +153,7 @@ class IIRFilter {
 }
 
 // Generate time-based waveform segments (every X seconds)
-function generateTimeBasedWaveform(audioBuffer) {
+function generateTimeBasedWaveform(audioBuffer, report) {
 	const sampleRate = audioBuffer.sampleRate;
 	const channelData = audioBuffer.getChannelData(0);
 	const samplesPerSegment = Math.floor(sampleRate * 1);
@@ -151,13 +172,14 @@ function generateTimeBasedWaveform(audioBuffer) {
 		const average = sum / (end - start);
 		const normalized = Math.min(100, average * 300);
 		waveform.push(normalized);
+		report(94 + 5 * (i + 1) / totalSegments);
 	}
 
 	return waveform;
 }
 
 // Calculate LUFS
-function calculateLUFS(audioBuffer) {
+function calculateLUFS(audioBuffer, report) {
 	const sampleRate = audioBuffer.sampleRate;
 	const numChannels = audioBuffer.numberOfChannels;
 
@@ -212,6 +234,7 @@ function calculateLUFS(audioBuffer) {
 		}
 
 		processedSamples += chunkLength;
+		report(60 * processedSamples / audioBuffer.length);
 	}
 
 	let position = 0;
@@ -229,8 +252,10 @@ function calculateLUFS(audioBuffer) {
 
 		blockPowers.push(blockPower);
 		position += hopSize;
+		report(60 + 18 * Math.min(1, position / Math.max(1, audioBuffer.length - blockSize + hopSize)));
 	}
 
+	report(78);
 	const absThreshold = Math.pow(10, -70 / 10);
 	const gatedBlocks = blockPowers.filter(p => p > absThreshold);
 
@@ -254,12 +279,13 @@ function calculateLUFS(audioBuffer) {
 }
 
 // Calculate True Peak
-function calculateTruePeak(audioBuffer) {
+function calculateTruePeak(audioBuffer, report) {
 	let maxPeak = 0;
 
 	for (let ch = 0; ch < audioBuffer.numberOfChannels; ch++) {
 		const channelData = audioBuffer.getChannelData(ch);
 		for (let i = 0; i < channelData.length; i++) {
+			if (i % 16384 === 0) report(80 + 14 * (ch + i / channelData.length) / audioBuffer.numberOfChannels);
 			const absValue = Math.abs(channelData[i]);
 			if (absValue > maxPeak) {
 				maxPeak = absValue;

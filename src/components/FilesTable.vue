@@ -14,7 +14,9 @@ import Waveform from './Waveform.vue'
 async function removeFile(id) {
 	let fileToRemove = files.value.find(f => f.id == id)
 
-	if (!fileToRemove || busy.value || analyzing.value) return
+	if (!fileToRemove) return
+	const pending = ['queued', 'decoding', 'analyzing'].includes(fileToRemove.status)
+	if (!pending && (busy.value || analyzing.value)) return
 
 	if (nowPlaying.value.id == id) {
 		if (nowPlaying.value.state == 'playing') await fileToRemove.audioEl.pause()
@@ -127,13 +129,13 @@ const levelModels = [{ val: 'spotify', title: 'Spotify' }, { val: 'youtube', tit
 			@dragend="clearDragVars"
 		>
 			<div class="track-grip">
-				<span v-if="f.status != 'analyzing'" class="button-grip flex ai-c" @pointerdown="dragAllowed = true" @pointerup="dragAllowed = false" @pointercancel="dragAllowed = false">
+				<span v-if="!['queued', 'decoding', 'analyzing'].includes(f.status)" class="button-grip flex ai-c" @pointerdown="dragAllowed = true" @pointerup="dragAllowed = false" @pointercancel="dragAllowed = false">
 					<IconGripVertical />
 				</span>
 			</div>
 			<div class="track-control ta-c">
 				<Transition name="fade" mode="out-in">
-					<div v-if="f.status == 'analyzing'" class="track-loader-outer">
+					<div v-if="['queued', 'decoding', 'analyzing'].includes(f.status)" class="track-loader-outer">
 						<IconLoader2 class="track-loader color-heading" />
 					</div>
 					<button v-else-if="f.status == 'completed'" class="button-play" @click="togglePlay(f.id)">
@@ -152,18 +154,25 @@ const levelModels = [{ val: 'spotify', title: 'Spotify' }, { val: 'youtube', tit
 				{{ f.name }}
 			</div>
 			<Transition name="fade" mode="out-in">
-				<div v-if="f.status == 'analyzing'" class="track-message color-blue fw600">Analyzing...</div>
-				<div v-else-if="f.status == 'error'" class="track-message color-red fw600">
-					<button v-if="supportsSessions" class="button button-light popover-button" :disabled="busy || analyzing" @click="reconnectFile(f)" :title="f.error">{{ f.needsPermission ? 'Restore access' : 'Locate file' }}</button>
+				<div v-if="['queued', 'decoding', 'analyzing'].includes(f.status)" class="track-message track-progress color-blue fw600">
+					<span v-if="f.status == 'queued'">Queued</span>
+					<template v-else-if="f.status == 'decoding'"><span class="track-progress-label">Decoding</span> <progress :aria-label="`Decoding ${f.name}`"></progress></template>
+					<template v-else><span class="track-progress-label">Analyzing {{ f.progress ?? 0 }}%</span> <progress :value="f.progress ?? 0" max="100" :aria-label="`Analyzing ${f.name}`"></progress></template>
 				</div>
-				<div v-else class="track-data ta-c flex">
+				<div v-else-if="f.status == 'cancelled'" class="track-message">Cancelled</div>
+				<div v-else-if="f.status == 'error'" class="track-message color-red fw600">
+					<span v-if="f.error && !supportsSessions" :title="f.error">Error: {{ f.error }}</span>
+					<button v-else-if="supportsSessions" class="button button-light popover-button" :disabled="busy || analyzing" @click="reconnectFile(f)" :title="f.error">{{ f.needsPermission ? 'Restore access' : 'Locate file' }}</button>
+				</div>
+				<div v-else class="track-data ta-c flex" aria-label="Completed">
 					<div class="track-level fw600 color-heading" data-title="dBTP">{{ formatPenalty(f.truePeak) }}</div>
 					<div class="track-level fw600 color-heading clickable" data-title="LUFS" @click="levelModel = 'original'">{{ formatPenalty(f.lufs) }}</div>
 					<div v-for="lm in levelModels" class="track-level fw600 clickable" :data-title="lm.title" :class="[getColorClass(f[lm.val]), { colHl: levelModel == lm.val }]" @click="levelModel = lm.val">{{ formatPenalty(f[lm.val]) }}</div>
 				</div>
 			</Transition>
-			<div v-if="f.status != 'analyzing'" class="track-remove">
-				<button :disabled="busy || analyzing" @click.prevent="removeFile(f.id)" class="button-x"><IconX /></button>
+			<div class="track-remove">
+				<button v-if="['queued', 'decoding', 'analyzing'].includes(f.status)" @click.prevent="removeFile(f.id)" class="button-x" title="Cancel and remove"><IconX /></button>
+				<button v-else @click.prevent="removeFile(f.id)" class="button-x" :disabled="busy || analyzing"><IconX /></button>
 			</div>
 		</div>
 	</div>

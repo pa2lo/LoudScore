@@ -18,6 +18,7 @@ async function save() {
 	name.value = ''
 }
 function load(id) {
+	if (activeSession.value == id) return
 	popoverEl.value.hidePopover()
 	loadSession(id)
 }
@@ -37,8 +38,8 @@ async function deleteSession(id) {
 		<IconChevronDown class="levelmodel-toggle-arrow" />
 	</button>
 	<div id="sessionsPopover" class="app-popover sessions-popover" popover ref="popoverEl">
-		<button v-if="files.length || activeSession !== 'draft'" class="popover-option session-entry" :disabled="busy || analyzing || disabled" @click="createNewSession">New session</button>
 		<p v-if="!savedSessions.length && !files.length">No saved sessions</p>
+		<button v-if="files.length || activeSession !== 'draft'" class="popover-option session-entry" :disabled="busy || analyzing || disabled" @click="createNewSession">New session</button>
 		<div v-if="savedSessions.length" class="saved-sessions-section">
 			<button v-for="session in savedSessions" :key="session.id" class="popover-option session-entry" :class="{ isActive: activeSession === session.id }" :disabled="busy || analyzing" @click="load(session.id)">
 				<span class="session-entry-inner">

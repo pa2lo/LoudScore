@@ -214,7 +214,7 @@ p:where(:not(:first-child)) {
 .levelmodel-ico, .button-ico {
 	font-size: 1.5rem;
 }
-.levelmodel:hover, .setting-label:hover, .popover-option:hover {
+.levelmodel:hover, .setting-label:hover, .popover-option:where(:not(:disabled)):hover {
 	color: var(--accent);
 	/* color: var(--accentDark); */
 	background: color-mix(in srgb, var(--accentLight) 65%, var(--accentContrast));
@@ -235,6 +235,10 @@ p:where(:not(:first-child)) {
 .popover-option {
 	width: 100%;
 	justify-content: start;
+}
+.popover-option:disabled {
+	cursor: not-allowed;
+	opacity: 0.6;
 }
 
 .setting-options {
@@ -469,11 +473,71 @@ button, .button {
 	place-content: center;
 }
 .track-message {
-	height: 2.5rem;
-	place-content: center;
+	height: auto;
+	min-height: 2.25rem;
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: .25rem .5rem;
 	line-height: 1.25;
 	margin: -.25rem 0;
+	padding: 0 0 0 .5rem;
 }
+.track-progress progress {
+	order: -1;
+	appearance: none;
+	-webkit-appearance: none;
+	flex: 1 1 5rem;
+	width: 8rem;
+	min-width: 0;
+	max-width: 8rem;
+	height: .375rem;
+	border: 0;
+	border-radius: 999px;
+	overflow: hidden;
+	background: var(--accentLight);
+	color: var(--accentDark);
+}
+.track-progress progress::-webkit-progress-bar {
+	background: var(--accentLight);
+	border-radius: inherit;
+}
+.track-progress progress::-webkit-progress-value {
+	background: var(--accentDark);
+	border-radius: inherit;
+	transition: width .15s ease-out;
+}
+.track-progress progress::-moz-progress-bar {
+	background: var(--accentDark);
+	border-radius: inherit;
+}
+/* A moving segment indicates activity only; decoding has no percentage. */
+.track-progress progress:not([value]) {
+	background: linear-gradient(var(--accentDark), var(--accentDark)) no-repeat,
+		var(--accentLight);
+	background-size: 35% 100%;
+	animation: decoding-activity 1.5s ease-in-out infinite alternate;
+}
+.track-progress progress:not([value])::-webkit-progress-bar {
+	background: transparent;
+}
+.track-progress progress:not([value])::-moz-progress-bar {
+	background: transparent;
+}
+@keyframes decoding-activity {
+	from { background-position: 0% 0; }
+	to { background-position: 100% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+	.track-progress progress:not([value]) {
+		animation: none;
+		background-position: 50% 0;
+	}
+	.track-progress progress::-webkit-progress-value {
+		transition: none;
+	}
+}
+
 .isCurrent {
 	border-color: color-mix(in srgb, var(--border) 75%, var(--accent));
 }
@@ -738,7 +802,11 @@ button, .button {
 		grid-column: 2/-1;
 	}
 
-	.wf-outer, .track-message {
+	.track-remove {
+		grid-column: 4;
+	}
+
+	.wf-outer {
 		height: 2.25rem;
 	}
 }
@@ -788,6 +856,9 @@ button, .button {
 	}
 	.button-narrower {
 		padding-inline: .75rem;
+	}
+	.track-remove {
+		grid-column: 3;
 	}
 }
 

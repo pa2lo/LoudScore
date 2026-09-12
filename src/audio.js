@@ -114,7 +114,7 @@ export function setMediaSessionHandlers() {
 		navigator.mediaSession.playbackState = nowPlaying.value.state
 		navigator.mediaSession.metadata = new MediaMetadata(metadataObject)
 	} else {
-		navigator.mediaSession.metadata = null;
-  		navigator.mediaSession.playbackState = 'none';
+		navigator.mediaSession.metadata = null
+  		navigator.mediaSession.playbackState = 'none'
 	}
 }

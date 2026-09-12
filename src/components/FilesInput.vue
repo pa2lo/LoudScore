@@ -3,17 +3,24 @@ import { analyzing } from '@/store'
 import { IconUpload } from '@tabler/icons-vue'
 import { supportsSessions, busy, addFiles, pickFiles, inputError } from '@/sessions'
 import { ref } from 'vue'
-defineProps({ large: Boolean })
+
+defineProps({
+	large: Boolean
+})
+
 const input = ref(null)
+
 function selectFiles() {
 	if (busy.value || analyzing.value) return
 	if (supportsSessions) pickFiles()
 	else input.value.click()
 }
+
 function changed(event) {
 	addFiles(Array.from(event.target.files || []).map(file => ({ file })))
 	event.target.value = ''
 }
+
 async function dropped(event) {
 	if (busy.value || analyzing.value) return
 	// Request handles before yielding; the drag data store is only available during the event.
@@ -24,7 +31,9 @@ async function dropped(event) {
 	})
 	try {
 		await addFiles((await Promise.all(pending)).filter(({ file, handle }) => file && handle?.kind !== 'directory' && (file.type.startsWith('audio/') || /\.(mp3|wav|ogg|m4a|flac|aac|aiff|opus|webm)$/i.test(file.name))))
-	} catch (error) { inputError.value = error.message }
+	} catch (error) {
+		inputError.value = error.message
+	}
 }
 </script>
 <template>
